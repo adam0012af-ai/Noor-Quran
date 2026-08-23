@@ -2,46 +2,75 @@ name: Build Noor Quran APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - master
 
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Extract final source
+        run: |
+          mkdir -p project
+          unzip -q Noor-Quran-FINAL-Source-v1.0.0.zip -d project
+          echo "=== Extracted files ==="
+          find project -maxdepth 3 -type f | head -100
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
 
-      - name: Make Gradle executable
-        run: chmod +x gradlew
+      - name: Find Android project
+        id: findproject
+        run: |
+          SETTINGS=$(find project -name "settings.gradle" -o -name "settings.gradle.kts" | head -1)
+
+          if [ -z "$SETTINGS" ]; then
+            echo "Android project not found"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS")
+          echo "Project directory: $PROJECT_DIR"
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Show project structure
+        working-directory: ${{ steps.findproject.outputs.dir }}
+        run: |
+          pwd
+          find . -maxdepth 4 -type f | sort | head -200
 
       - name: Build Debug APK
-        run: ./gradlew clean assembleDebug --stacktrace
-
-      - name: Find APK
+        working-directory: ${{ steps.findproject.outputs.dir }}
         run: |
-          echo "Generated APK files:"
-          find . -type f -name "*.apk"
+          gradle :app:assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Locate APK
+        id: apk
+        run: |
+          APK=$(find project -type f -name "*debug*.apk" | head -1)
+
+          if [ -z "$APK" ]; then
+            echo "APK was not generated"
+            exit 1
+          fi
+
+          echo "APK found: $APK"
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Noor Quran APK
         uses: actions/upload-artifact@v4
         with:
           name: Noor-Quran-v1.0.0-APK
-          path: |
-            app/build/outputs/apk/debug/*.apk
+          path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
           retention-days: 30
