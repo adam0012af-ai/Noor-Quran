@@ -1,0 +1,388 @@
+name: Build Noor Quran v2.2.0 Reels
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract current source
+        run: |
+          set -e
+          rm -rf project
+          mkdir -p project
+          unzip -q Noor-Quran-Source-v2.1.0-UI-Audio.zip -d project
+
+      - name: Find Android project
+        id: findproject
+        shell: bash
+        run: |
+          set -e
+          SETTINGS=$(find project \( -name "settings.gradle" -o -name "settings.gradle.kts" \) | head -1)
+          test -n "$SETTINGS" || { echo "::error::Android project not found"; exit 1; }
+          PROJECT_DIR=$(dirname "$SETTINGS")
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Android project: $PROJECT_DIR"
+
+      - name: Inject Quran Reels Maker
+        working-directory: ${{ steps.findproject.outputs.dir }}
+        shell: bash
+        run: |
+          set -e
+
+          MAIN=$(find app/src/main -type f -name "MainActivity.java" | head -1)
+          test -n "$MAIN" || { echo "::error::MainActivity.java not found"; exit 1; }
+
+          PACKAGE=$(sed -n 's/^[[:space:]]*package[[:space:]]\+\([^;]*\);/\1/p' "$MAIN" | head -1)
+          test -n "$PACKAGE" || { echo "::error::Java package not detected"; exit 1; }
+
+          JAVA_DIR=$(dirname "$MAIN")
+          echo "Package: $PACKAGE"
+
+          cat > "$JAVA_DIR/ReelsActivity.java" <<JAVA
+          package $PACKAGE;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.graphics.Color;
+          import android.graphics.Typeface;
+          import android.graphics.drawable.GradientDrawable;
+          import android.view.Gravity;
+          import android.view.View;
+          import android.widget.*;
+
+          public class ReelsActivity extends Activity {
+              private LinearLayout root;
+              private TextView preview;
+              private Spinner surah, reciter, ratio, fontStyle;
+              private EditText fromAyah, toAyah;
+              private SeekBar fontSize;
+              private String backgroundName = "مسجد ذهبي";
+
+              private static final String[] SURAHS = {
+                  "الفاتحة","البقرة","آل عمران","النساء","المائدة","الأنعام","الأعراف","الأنفال","التوبة","يونس",
+                  "هود","يوسف","الرعد","إبراهيم","الحجر","النحل","الإسراء","الكهف","مريم","طه",
+                  "الأنبياء","الحج","المؤمنون","النور","الفرقان","الشعراء","النمل","القصص","العنكبوت","الروم",
+                  "لقمان","السجدة","الأحزاب","سبأ","فاطر","يس","الصافات","ص","الزمر","غافر",
+                  "فصلت","الشورى","الزخرف","الدخان","الجاثية","الأحقاف","محمد","الفتح","الحجرات","ق",
+                  "الذاريات","الطور","النجم","القمر","الرحمن","الواقعة","الحديد","المجادلة","الحشر","الممتحنة",
+                  "الصف","الجمعة","المنافقون","التغابن","الطلاق","التحريم","الملك","القلم","الحاقة","المعارج",
+                  "نوح","الجن","المزمل","المدثر","القيامة","الإنسان","المرسلات","النبأ","النازعات","عبس",
+                  "التكوير","الانفطار","المطففين","الانشقاق","البروج","الطارق","الأعلى","الغاشية","الفجر","البلد",
+                  "الشمس","الليل","الضحى","الشرح","التين","العلق","القدر","البينة","الزلزلة","العاديات",
+                  "القارعة","التكاثر","العصر","الهمزة","الفيل","قريش","الماعون","الكوثر","الكافرون","النصر",
+                  "المسد","الإخلاص","الفلق","الناس"
+              };
+
+              private static final String[] RECITERS = {
+                  "مشاري راشد العفاسي","ماهر المعيقلي","عبد الباسط عبد الصمد","محمود خليل الحصري",
+                  "محمد صديق المنشاوي","سعد الغامدي","ياسر الدوسري","إدريس أبكر",
+                  "فارس عباد","ناصر القطامي","أحمد العجمي","عبد الرحمن السديس"
+              };
+
+              private static final String[] BACKGROUNDS = {
+                  "مسجد ذهبي","سماء الفجر","سماء الليل","نجوم هادئة","غيوم بيضاء","غيوم داكنة",
+                  "بحر هادئ","أمواج ليلية","شلال","نهر بين الجبال","جبال الفجر","جبال الثلج",
+                  "صحراء ذهبية","كثبان ليلية","واحة","غابة ضبابية","أشجار خضراء","أوراق خريف",
+                  "مئذنة ليلية","قبة مسجد","زخرفة إسلامية 1","زخرفة إسلامية 2","زخرفة إسلامية 3","محراب",
+                  "رخام أبيض","رخام داكن","تدرج أخضر","تدرج أزرق","تدرج بنفسجي","تدرج ذهبي",
+                  "أسود فاخر","أبيض بسيط","رمادي هادئ","ضوء ناعم","بوكيه","خلفية شفافة للنص"
+              };
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  ScrollView scroll = new ScrollView(this);
+                  root = new LinearLayout(this);
+                  root.setOrientation(LinearLayout.VERTICAL);
+                  root.setPadding(dp(18), dp(18), dp(18), dp(28));
+                  root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+                  root.setBackgroundColor(Color.rgb(247,246,241));
+                  scroll.addView(root);
+
+                  title("صانع ريلز القرآن");
+                  hint("اختر السورة والآيات والقارئ والخلفية ثم عاين التصميم");
+
+                  surah = spinner("السورة", SURAHS);
+
+                  LinearLayout row = new LinearLayout(this);
+                  row.setOrientation(LinearLayout.HORIZONTAL);
+                  fromAyah = number("من آية","1");
+                  toAyah = number("إلى آية","7");
+                  row.addView(fromAyah, new LinearLayout.LayoutParams(0, dp(56), 1));
+                  Space gap = new Space(this);
+                  row.addView(gap, new LinearLayout.LayoutParams(dp(10), 1));
+                  row.addView(toAyah, new LinearLayout.LayoutParams(0, dp(56), 1));
+                  root.addView(row);
+
+                  reciter = spinner("القارئ", RECITERS);
+                  ratio = spinner("مقاس الفيديو", new String[]{"9:16 — Reels / Shorts / TikTok","1:1 — مربع","16:9 — أفقي"});
+                  fontStyle = spinner("الخط", new String[]{"عثماني واضح","نسخ واضح","كبير لضعاف النظر","حديث وبسيط"});
+
+                  label("حجم الخط");
+                  fontSize = new SeekBar(this);
+                  fontSize.setMax(44);
+                  fontSize.setProgress(20);
+                  root.addView(fontSize);
+
+                  label("مكتبة الخلفيات — 36 قالبًا");
+                  HorizontalScrollView hs = new HorizontalScrollView(this);
+                  LinearLayout bgRow = new LinearLayout(this);
+                  bgRow.setOrientation(LinearLayout.HORIZONTAL);
+                  for (String bg : BACKGROUNDS) {
+                      Button b = new Button(this);
+                      b.setText(bg);
+                      b.setAllCaps(false);
+                      b.setOnClickListener(v -> {
+                          backgroundName = ((Button)v).getText().toString();
+                          refreshPreview();
+                      });
+                      bgRow.addView(b, new LinearLayout.LayoutParams(dp(145), dp(62)));
+                  }
+                  hs.addView(bgRow);
+                  root.addView(hs);
+
+                  Button device = button("إضافة صورة أو فيديو من الجهاز");
+                  device.setOnClickListener(v -> Toast.makeText(this,"اختيار وسائط الجهاز سيُربط مع محرّك التصدير",Toast.LENGTH_SHORT).show());
+                  root.addView(device);
+
+                  label("المعاينة");
+                  preview = new TextView(this);
+                  preview.setText("﴿ بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ ﴾\n\nسورة الفاتحة");
+                  preview.setTextColor(Color.WHITE);
+                  preview.setTextSize(28);
+                  preview.setTypeface(Typeface.SERIF, Typeface.BOLD);
+                  preview.setGravity(Gravity.CENTER);
+                  preview.setPadding(dp(20),dp(35),dp(20),dp(35));
+                  root.addView(preview, new LinearLayout.LayoutParams(-1, dp(320)));
+                  applyBackground();
+
+                  Button refresh = button("تحديث المعاينة");
+                  refresh.setOnClickListener(v -> refreshPreview());
+                  root.addView(refresh);
+
+                  Button export = button("إنشاء الفيديو");
+                  export.setOnClickListener(v -> Toast.makeText(this,
+                      "تم تجهيز واجهة الريلز والمكتبة. اربط محرّك الصوت والتصدير قبل اعتماد النسخة النهائية.",
+                      Toast.LENGTH_LONG).show());
+                  root.addView(export);
+
+                  hint("114 سورة • 12 قارئًا • 36 خلفية • 9:16 / 1:1 / 16:9");
+                  setContentView(scroll);
+
+                  fontSize.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                      public void onProgressChanged(SeekBar s,int p,boolean f) { preview.setTextSize(20 + p); }
+                      public void onStartTrackingTouch(SeekBar s) {}
+                      public void onStopTrackingTouch(SeekBar s) {}
+                  });
+              }
+
+              private void refreshPreview() {
+                  String name = SURAHS[surah.getSelectedItemPosition()];
+                  preview.setText("﴿ نص الآيات المختارة ﴾\n\nسورة " + name + "\n" +
+                      fromAyah.getText() + " — " + toAyah.getText() + "\n\n" + backgroundName);
+                  applyBackground();
+              }
+
+              private void applyBackground() {
+                  int h = Math.abs(backgroundName.hashCode());
+                  int c1 = Color.rgb(25+h%55,60+(h/7)%80,55+(h/13)%90);
+                  int c2 = Color.rgb(10+(h/17)%45,25+(h/23)%65,40+(h/31)%80);
+                  GradientDrawable gd = new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{c1,c2});
+                  gd.setCornerRadius(dp(22));
+                  preview.setBackground(gd);
+              }
+
+              private Spinner spinner(String name,String[] items) {
+                  label(name);
+                  Spinner s = new Spinner(this);
+                  s.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,items));
+                  root.addView(s,new LinearLayout.LayoutParams(-1,dp(58)));
+                  return s;
+              }
+
+              private EditText number(String hint,String value) {
+                  EditText e = new EditText(this);
+                  e.setHint(hint);
+                  e.setText(value);
+                  e.setGravity(Gravity.CENTER);
+                  e.setTextSize(18);
+                  e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+                  return e;
+              }
+
+              private void title(String text) {
+                  TextView t = new TextView(this);
+                  t.setText(text); t.setTextSize(28); t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+                  t.setGravity(Gravity.CENTER); t.setTextColor(Color.rgb(31,87,71));
+                  root.addView(t);
+              }
+
+              private void label(String text) {
+                  TextView t = new TextView(this);
+                  t.setText(text); t.setTextSize(18); t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+                  t.setTextColor(Color.rgb(44,60,55)); t.setPadding(0,dp(18),0,dp(7));
+                  root.addView(t);
+              }
+
+              private void hint(String text) {
+                  TextView t = new TextView(this);
+                  t.setText(text); t.setTextSize(15); t.setGravity(Gravity.CENTER);
+                  t.setTextColor(Color.DKGRAY); t.setPadding(0,dp(7),0,dp(12));
+                  root.addView(t);
+              }
+
+              private Button button(String text) {
+                  Button b = new Button(this);
+                  b.setText(text); b.setAllCaps(false); b.setTextSize(17); b.setMinHeight(dp(54));
+                  return b;
+              }
+
+              private int dp(int v) {
+                  return (int)(v * getResources().getDisplayMetrics().density + 0.5f);
+              }
+          }
+          JAVA
+
+          python3 - "$MAIN" "$PACKAGE" <<'PY'
+          import re, sys
+          from pathlib import Path
+
+          p = Path(sys.argv[1])
+          package = sys.argv[2]
+          s = p.read_text(encoding="utf-8")
+
+          if "installQuranReelsEntry" not in s:
+              m = re.search(r"super\.onCreate\s*\(\s*savedInstanceState\s*\)\s*;", s)
+              if not m:
+                  m = re.search(r"setContentView\s*\([^;]+;", s)
+              if not m:
+                  raise SystemExit("Could not patch MainActivity")
+
+              hook = '''
+              new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                  @Override public void run() { installQuranReelsEntry(); }
+              }, 500);
+              '''
+              s = s[:m.end()] + hook + s[m.end():]
+
+              method = '''
+              private void installQuranReelsEntry() {
+                  try {
+                      android.widget.Button b = new android.widget.Button(this);
+                      b.setText("صانع ريلز القرآن");
+                      b.setTextSize(16);
+                      b.setAllCaps(false);
+                      b.setOnClickListener(new android.view.View.OnClickListener() {
+                          @Override public void onClick(android.view.View v) {
+                              startActivity(new android.content.Intent(MainActivity.this, ReelsActivity.class));
+                          }
+                      });
+                      android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
+                          android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                          android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
+                      lp.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.END;
+                      int m = (int)(16 * getResources().getDisplayMetrics().density);
+                      lp.setMargins(m,m,m,m);
+                      addContentView(b, lp);
+                  } catch (Throwable ignored) {}
+              }
+              '''
+              pos = s.rfind("}")
+              if pos < 0:
+                  raise SystemExit("MainActivity ending not found")
+              s = s[:pos] + method + "\n" + s[pos:]
+              p.write_text(s, encoding="utf-8")
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          manifest = Path("app/src/main/AndroidManifest.xml")
+          s = manifest.read_text(encoding="utf-8")
+          if "ReelsActivity" not in s:
+              s = s.replace("</application>",
+                  '    <activity android:name=".ReelsActivity" android:exported="false" android:screenOrientation="portrait" />\n</application>')
+              manifest.write_text(s, encoding="utf-8")
+          PY
+
+      - name: Add licensed human dhikr audio
+        working-directory: ${{ steps.findproject.outputs.dir }}
+        run: |
+          set -e
+          mkdir -p app/src/main/res/raw
+          curl -fL --retry 3 "https://upload.wikimedia.org/wikipedia/commons/7/73/Ar-%D8%A7%D9%84%D8%AD%D9%85%D8%AF_%D9%84%D9%84%D9%87.ogg" -o app/src/main/res/raw/zikr_alhamdulillah.ogg
+          curl -fL --retry 3 "https://upload.wikimedia.org/wikipedia/commons/6/69/Ar-eg-%D8%A7%D9%84%D9%84%D9%87_%D8%A3%D9%83%D8%A8%D8%B1.oga" -o app/src/main/res/raw/zikr_allahu_akbar.ogg
+          curl -fL --retry 3 "https://upload.wikimedia.org/wikipedia/commons/e/e1/Ar-%D8%A3%D8%B3%D8%AA%D8%BA%D9%81%D8%B1_%D8%A7%D9%84%D9%84%D9%87.ogg" -o app/src/main/res/raw/zikr_astaghfirullah.ogg
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Build Debug APK
+        working-directory: ${{ steps.findproject.outputs.dir }}
+        run: |
+          set -e
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew :app:assembleDebug --stacktrace --no-daemon
+          else
+            gradle :app:assembleDebug --stacktrace --no-daemon
+          fi
+
+      - name: Locate APK
+        id: apk
+        shell: bash
+        run: |
+          set -e
+          APK=$(find project -type f -path "*/build/outputs/apk/*/*.apk" | head -1)
+          test -n "$APK" || { echo "::error::APK not generated"; find project -name "*.apk" -print; exit 1; }
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          echo "APK: $APK"
+
+      - name: Package final APK and source
+        shell: bash
+        run: |
+          set -e
+          mkdir -p release
+          cp "${{ steps.apk.outputs.path }}" release/Noor-Quran-v2.2.0-Reels.apk
+
+          cd "${{ steps.findproject.outputs.dir }}"
+          rm -rf .gradle app/build build
+          zip -qr "$GITHUB_WORKSPACE/release/Noor-Quran-v2.2.0-Reels-Source.zip" .
+          cd "$GITHUB_WORKSPACE"
+
+          ls -lh release/
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Noor-Quran-v2.2.0-Reels-APK
+          path: release/Noor-Quran-v2.2.0-Reels.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload complete source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Noor-Quran-v2.2.0-Reels-Source
+          path: release/Noor-Quran-v2.2.0-Reels-Source.zip
+          if-no-files-found: error
+          retention-days: 30
