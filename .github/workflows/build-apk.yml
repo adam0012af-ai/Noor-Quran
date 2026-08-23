@@ -1,4 +1,4 @@
-name: Build Noor Quran v2.0.1 APK
+name: Build Noor Quran v2.1.0 With Audio
 
 on:
   workflow_dispatch:
@@ -11,13 +11,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract v2.0.1 source
+      - name: Extract v2.1.0 source
         run: |
           rm -rf project
           mkdir -p project
-          unzip -q Noor-Quran-Source-v2.0.1-Compile-Fix.zip -d project
-          echo "=== Extracted source ==="
-          find project -maxdepth 4 -type f | sort | head -200
+          unzip -q Noor-Quran-Source-v2.1.0-UI-Audio.zip -d project
+          echo "Source extracted"
+
+      - name: Find Android project
+        id: findproject
+        shell: bash
+        run: |
+          SETTINGS=$(find project \( -name "settings.gradle" -o -name "settings.gradle.kts" \) | head -1)
+          if [ -z "$SETTINGS" ]; then
+            echo "ERROR: Android project not found"
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$SETTINGS")
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Android project: $PROJECT_DIR"
+
+      - name: Add licensed human dhikr audio
+        working-directory: ${{ steps.findproject.outputs.dir }}
+        shell: bash
+        run: |
+          mkdir -p app/src/main/res/raw
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://upload.wikimedia.org/wikipedia/commons/7/73/Ar-%D8%A7%D9%84%D8%AD%D9%85%D8%AF_%D9%84%D9%84%D9%87.ogg" \
+            -o app/src/main/res/raw/zikr_alhamdulillah.ogg
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://upload.wikimedia.org/wikipedia/commons/6/69/Ar-eg-%D8%A7%D9%84%D9%84%D9%87_%D8%A3%D9%83%D8%A8%D8%B1.oga" \
+            -o app/src/main/res/raw/zikr_allahu_akbar.ogg
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://upload.wikimedia.org/wikipedia/commons/e/e1/Ar-%D8%A3%D8%B3%D8%AA%D8%BA%D9%81%D8%B1_%D8%A7%D9%84%D9%84%D9%87.ogg" \
+            -o app/src/main/res/raw/zikr_astaghfirullah.ogg
+          ls -lh app/src/main/res/raw/
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -30,19 +58,6 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Find Android project
-        id: findproject
-        shell: bash
-        run: |
-          SETTINGS=$(find project \( -name "settings.gradle" -o -name "settings.gradle.kts" \) | head -1)
-          if [ -z "$SETTINGS" ]; then
-            echo "ERROR: settings.gradle not found"
-            exit 1
-          fi
-          PROJECT_DIR=$(dirname "$SETTINGS")
-          echo "Project: $PROJECT_DIR"
-          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
-
       - name: Build Debug APK
         working-directory: ${{ steps.findproject.outputs.dir }}
         run: |
@@ -53,23 +68,36 @@ jobs:
             gradle :app:assembleDebug --stacktrace --no-daemon
           fi
 
-      - name: Find generated APK
+      - name: Locate APK
         id: apk
         shell: bash
         run: |
           APK=$(find project -type f -path "*/build/outputs/apk/debug/*.apk" | head -1)
           if [ -z "$APK" ]; then
-            echo "ERROR: APK not found"
-            find project -type f -name "*.apk" -print
+            echo "ERROR: APK not generated"
             exit 1
           fi
-          echo "APK: $APK"
           echo "path=$APK" >> "$GITHUB_OUTPUT"
+          echo "APK: $APK"
 
-      - name: Upload APK artifact
+      - name: Package complete source with audio
+        working-directory: ${{ steps.findproject.outputs.dir }}
+        run: |
+          rm -rf .gradle app/build build
+          zip -qr "$GITHUB_WORKSPACE/Noor-Quran-v2.1.0-Source-With-Audio.zip" .
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Noor-Quran-v2.0.1-APK
+          name: Noor-Quran-v2.1.0-APK
           path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload complete source with audio
+        uses: actions/upload-artifact@v4
+        with:
+          name: Noor-Quran-v2.1.0-Source-With-Audio
+          path: Noor-Quran-v2.1.0-Source-With-Audio.zip
           if-no-files-found: error
           retention-days: 30
