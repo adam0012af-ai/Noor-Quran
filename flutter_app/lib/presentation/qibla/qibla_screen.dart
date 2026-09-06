@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:smooth_compass/utils/smooth_compass.dart';
+import 'package:smooth_compass/utils/src/compass_ui.dart';
 
 class QiblaScreen extends StatelessWidget {
   const QiblaScreen({super.key});
+
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('اتجاه القبلة')),
@@ -16,11 +17,37 @@ class QiblaScreen extends StatelessWidget {
               return AnimatedRotation(
                 turns: snapshot?.data?.turns ?? 0,
                 duration: const Duration(milliseconds: 500),
-                child: Stack(alignment: Alignment.center, children: [
-                  Container(width: 280, height: 280, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(width: 3, color: Theme.of(context).colorScheme.primary))),
-                  const Positioned(top: 18, child: Text('N', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
-                  AnimatedRotation(turns: (snapshot?.data?.qiblahOffset ?? 0) / 360, duration: const Duration(milliseconds: 500), child: const Icon(Icons.navigation_rounded, size: 120)),
-                ]),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 280,
+                      height: 280,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          width: 3,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                    const Positioned(
+                      top: 18,
+                      child: Text(
+                        'N',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: (snapshot?.data?.qiblahOffset ?? 0) / 360,
+                      duration: const Duration(milliseconds: 500),
+                      child: const Icon(Icons.navigation_rounded, size: 120),
+                    ),
+                  ],
+                ),
               );
             },
           ),
