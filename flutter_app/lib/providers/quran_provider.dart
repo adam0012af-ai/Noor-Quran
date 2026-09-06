@@ -11,6 +11,7 @@ class QuranProvider extends ChangeNotifier {
   bool _loading = true;
   String _query = '';
 
+  List<Surah> get allSurahs => List.unmodifiable(_surahs);
   List<Surah> get surahs => _query.isEmpty
       ? _surahs
       : _surahs.where((s) => s.name.contains(_query) || s.englishName.toLowerCase().contains(_query.toLowerCase()) || s.ayahs.any((a) => a.text.contains(_query))).toList();
@@ -27,6 +28,12 @@ class QuranProvider extends ChangeNotifier {
 
   void search(String value) {
     _query = value.trim();
+    notifyListeners();
+  }
+
+  void clearSearch() {
+    if (_query.isEmpty) return;
+    _query = '';
     notifyListeners();
   }
 
