@@ -31,6 +31,29 @@ jobs:
         run: |
           flutter create --platforms=android --org com.noorapp .
           flutter pub get
+      - name: Patch legacy Android plugin namespaces
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          pub = Path.home() / '.pub-cache' / 'hosted' / 'pub.dev'
+          for gradle in pub.glob('*/android/build.gradle'):
+              text = gradle.read_text(encoding='utf-8')
+              if re.search(r'\bnamespace\s+[= ]', text):
+                  continue
+              manifest = gradle.parent / 'src' / 'main' / 'AndroidManifest.xml'
+              namespace = None
+              if manifest.exists():
+                  m = re.search(r'package=["\']([^"\']+)["\']', manifest.read_text(encoding='utf-8'))
+                  if m:
+                      namespace = m.group(1)
+              if not namespace:
+                  safe = re.sub(r'[^A-Za-z0-9_]', '_', gradle.parent.parent.name)
+                  namespace = f'com.noor.compat.{safe}'
+              gradle.write_text(text + f'\nandroid {{\n    namespace "{namespace}"\n}}\n', encoding='utf-8')
+              print(f'Patched namespace: {gradle} -> {namespace}')
+          PY
       - name: Build release APK
         working-directory: flutter_app
         run: flutter build apk --release
