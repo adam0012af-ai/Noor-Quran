@@ -1,8 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:intl/date_symbol_data_local.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
 import 'core/services/notification_service.dart';
@@ -17,14 +19,39 @@ import 'presentation/home/home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Local storage is part of the core offline experience, so it is prepared
+  // before rendering the app. Optional platform services are deliberately not
+  // allowed to block startup.
   await Hive.initFlutter();
   await Hive.openBox('settings');
   await Hive.openBox('bookmarks');
   await Hive.openBox('counters');
-  await initializeDateFormatting('ar');
-  await NotificationService.instance.initialize();
-  await MobileAds.instance.initialize();
+
   runApp(const IslamicApp());
+
+  // Never let ads, notification plugins, or locale preparation crash startup.
+  unawaited(_initializeOptionalServices());
+}
+
+Future<void> _initializeOptionalServices() async {
+  try {
+    await initializeDateFormatting('ar');
+  } catch (e, st) {
+    debugPrint('Arabic date formatting init failed: $e\n$st');
+  }
+
+  try {
+    await NotificationService.instance.initialize();
+  } catch (e, st) {
+    debugPrint('Notification initialization failed: $e\n$st');
+  }
+
+  try {
+    await MobileAds.instance.initialize();
+  } catch (e, st) {
+    debugPrint('Mobile Ads initialization failed: $e\n$st');
+  }
 }
 
 class IslamicApp extends StatelessWidget {
@@ -46,7 +73,11 @@ class IslamicApp extends StatelessWidget {
             title: 'نور',
             locale: const Locale('ar'),
             supportedLocales: const [Locale('ar'), Locale('en')],
-            localizationsDelegates: const [GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
             theme: AppTheme.light(settings.seedColor),
             darkTheme: AppTheme.dark(settings.seedColor),
             themeMode: settings.themeMode,
