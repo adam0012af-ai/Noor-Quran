@@ -41,7 +41,7 @@ class BookmarksScreen extends StatelessWidget {
                     final entry = entries[index];
                     final surahNumber = entry['surah'] as int;
                     final ayahNumber = entry['ayah'] as int;
-                    final surah = quran.surahs.firstWhere((s) => s.number == surahNumber);
+                    final surah = quran.allSurahs.firstWhere((s) => s.number == surahNumber);
                     final ayah = surah.ayahs.firstWhere((a) => a.numberInSurah == ayahNumber);
                     return Card(
                       child: ListTile(
@@ -57,7 +57,11 @@ class BookmarksScreen extends StatelessWidget {
                             textDirection: TextDirection.rtl,
                           ),
                         ),
-                        trailing: const Icon(Icons.chevron_left_rounded),
+                        trailing: IconButton(
+                          tooltip: 'إزالة من المحفوظات',
+                          onPressed: () => quran.toggleBookmark(surahNumber, ayahNumber),
+                          icon: const Icon(Icons.bookmark_remove_rounded),
+                        ),
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => SurahReaderScreen(surah: surah)),
                         ),
