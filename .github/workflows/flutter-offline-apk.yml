@@ -9,46 +9,33 @@ on:
 permissions:
   contents: read
 
-env:
-  FLUTTER_VERSION: stable
-
 jobs:
   build-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-
       - name: Prepare Flutter project
+        working-directory: flutter_app
         run: |
-          rm -rf flutter_build
-          mkdir flutter_build
-          unzip -q flutter/offline_islamic_app_starter_ci.zip -d flutter_build
-          cd flutter_build/offline_islamic_app
           flutter create --platforms=android --org com.noorapp .
           flutter pub get
-
       - name: Build release APK
-        working-directory: flutter_build/offline_islamic_app
+        working-directory: flutter_app
         run: flutter build apk --release
-
       - name: Rename APK
-        run: cp flutter_build/offline_islamic_app/build/app/outputs/flutter-apk/app-release.apk Noor-Offline-Islamic-v1.0.0.apk
-
+        run: cp flutter_app/build/app/outputs/flutter-apk/app-release.apk Noor-Offline-Islamic-v1.0.0.apk
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
