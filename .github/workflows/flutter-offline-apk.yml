@@ -1,4 +1,4 @@
-name: Flutter Offline APK
+name: Flutter Final APK
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,47 +26,38 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Prepare Flutter project
+      - name: Prepare Android project
         working-directory: flutter_app
         run: |
           flutter create --platforms=android --org com.noorapp .
           flutter pub get
-      - name: Patch legacy Android plugins
-        run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
-
-          pub = Path.home() / '.pub-cache' / 'hosted' / 'pub.dev'
-          for gradle in pub.glob('*/android/build.gradle'):
-              text = gradle.read_text(encoding='utf-8')
-              additions = []
-              if not re.search(r'\bnamespace\s+[= ]', text):
-                  manifest = gradle.parent / 'src' / 'main' / 'AndroidManifest.xml'
-                  namespace = None
-                  if manifest.exists():
-                      m = re.search(r'package=["\']([^"\']+)["\']', manifest.read_text(encoding='utf-8'))
-                      if m:
-                          namespace = m.group(1)
-                  if not namespace:
-                      safe = re.sub(r'[^A-Za-z0-9_]', '_', gradle.parent.parent.name)
-                      namespace = f'com.noor.compat.{safe}'
-                  additions.append(f'android {{\n    namespace "{namespace}"\n}}')
-              if 'kotlin-android' in text or 'kotlin("android")' in text or 'org.jetbrains.kotlin.android' in text:
-                  additions.append('tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {\n    kotlinOptions.jvmTarget = "11"\n}')
-              if additions:
-                  gradle.write_text(text + '\n' + '\n'.join(additions) + '\n', encoding='utf-8')
-                  print(f'Patched legacy plugin: {gradle}')
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          text = p.read_text(encoding='utf-8')
+          permissions = '''<uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />'''
+          text = text.replace('<application', permissions + '\n    <application', 1)
+          text = text.replace('android:label="offline_islamic_app"', 'android:label="نور"')
+          marker = '</application>'
+          metadata = '''        <meta-data
+                      android:name="com.google.android.gms.ads.APPLICATION_ID"
+                      android:value="ca-app-pub-3940256099942544~3347511713" />
+              '''
+          text = text.replace(marker, metadata + marker, 1)
+          p.write_text(text, encoding='utf-8')
           PY
       - name: Build release APK
         working-directory: flutter_app
         run: flutter build apk --release
       - name: Rename APK
-        run: cp flutter_app/build/app/outputs/flutter-apk/app-release.apk Noor-Offline-Islamic-v1.0.0.apk
+        run: cp flutter_app/build/app/outputs/flutter-apk/app-release.apk Noor-Final-Test-v1.0.0.apk
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Noor-Offline-Islamic-v1.0.0-APK
-          path: Noor-Offline-Islamic-v1.0.0.apk
+          name: Noor-Final-Test-v1.0.0-APK
+          path: Noor-Final-Test-v1.0.0.apk
           if-no-files-found: error
           retention-days: 30
