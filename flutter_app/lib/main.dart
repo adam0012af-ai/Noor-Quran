@@ -17,41 +17,89 @@ import 'providers/prayer_provider.dart';
 import 'providers/quran_provider.dart';
 import 'presentation/home/home_screen.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  runApp(const SafeBootApp());
+}
 
-  // Local storage is part of the core offline experience, so it is prepared
-  // before rendering the app. Optional platform services are deliberately not
-  // allowed to block startup.
-  await Hive.initFlutter();
-  await Hive.openBox('settings');
-  await Hive.openBox('bookmarks');
-  await Hive.openBox('counters');
+class SafeBootApp extends StatefulWidget {
+  const SafeBootApp({super.key});
 
-  runApp(const IslamicApp());
+  @override
+  State<SafeBootApp> createState() => _SafeBootAppState();
+}
 
-  // Never let ads, notification plugins, or locale preparation crash startup.
-  unawaited(_initializeOptionalServices());
+class _SafeBootAppState extends State<SafeBootApp> {
+  bool _ready = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _boot());
+  }
+
+  Future<void> _boot() async {
+    try {
+      await Hive.initFlutter();
+      await Hive.openBox('settings');
+      await Hive.openBox('bookmarks');
+      await Hive.openBox('counters');
+      if (!mounted) return;
+      setState(() => _ready = true);
+      unawaited(_initializeOptionalServices());
+    } catch (e, st) {
+      debugPrint('Core boot failed: $e\n$st');
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_ready) return const IslamicApp();
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: _error == null
+                  ? const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.auto_awesome_rounded, size: 64),
+                        SizedBox(height: 18),
+                        Text('نور', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+                        SizedBox(height: 18),
+                        CircularProgressIndicator(),
+                      ],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.error_outline_rounded, size: 64),
+                        const SizedBox(height: 16),
+                        const Text('تعذر تهيئة التخزين المحلي', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        SelectableText(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 18),
+                        FilledButton(onPressed: () { setState(() => _error = null); _boot(); }, child: const Text('إعادة المحاولة')),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> _initializeOptionalServices() async {
-  try {
-    await initializeDateFormatting('ar');
-  } catch (e, st) {
-    debugPrint('Arabic date formatting init failed: $e\n$st');
-  }
-
-  try {
-    await NotificationService.instance.initialize();
-  } catch (e, st) {
-    debugPrint('Notification initialization failed: $e\n$st');
-  }
-
-  try {
-    await MobileAds.instance.initialize();
-  } catch (e, st) {
-    debugPrint('Mobile Ads initialization failed: $e\n$st');
-  }
+  try { await initializeDateFormatting('ar'); } catch (_) {}
+  try { await NotificationService.instance.initialize(); } catch (_) {}
+  try { await MobileAds.instance.initialize(); } catch (_) {}
 }
 
 class IslamicApp extends StatelessWidget {
@@ -62,28 +110,26 @@ class IslamicApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AppSettingsProvider()),
-        ChangeNotifierProvider(create: (_) => QuranProvider(QuranRepository())..load()),
-        ChangeNotifierProvider(create: (_) => AzkarProvider(AzkarRepository())..load()),
+        ChangeNotifierProvider(create: (_) => QuranProvider(QuranRepository())),
+        ChangeNotifierProvider(create: (_) => AzkarProvider(AzkarRepository())),
         ChangeNotifierProvider(create: (_) => PrayerProvider()),
       ],
       child: Consumer<AppSettingsProvider>(
-        builder: (context, settings, _) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            title: 'نور',
-            locale: const Locale('ar'),
-            supportedLocales: const [Locale('ar'), Locale('en')],
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            theme: AppTheme.light(settings.seedColor),
-            darkTheme: AppTheme.dark(settings.seedColor),
-            themeMode: settings.themeMode,
-            home: const HomeScreen(),
-          );
-        },
+        builder: (context, settings, _) => MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'نور',
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: AppTheme.light(settings.seedColor),
+          darkTheme: AppTheme.dark(settings.seedColor),
+          themeMode: settings.themeMode,
+          home: const HomeScreen(),
+        ),
       ),
     );
   }
