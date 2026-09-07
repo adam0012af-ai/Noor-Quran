@@ -8,13 +8,25 @@ class AzkarProvider extends ChangeNotifier {
   AzkarProvider(this.repository);
 
   List<ZikrItem> _items = [];
-  bool _loading = true;
+  bool _loading = false;
+  bool _loaded = false;
+  String? _error;
+
   List<ZikrItem> get items => _items;
   bool get loading => _loading;
+  bool get loaded => _loaded;
+  String? get error => _error;
 
   Future<void> load() async {
+    if (_loaded || _loading) return;
+    _loading = true;
+    _error = null;
+    notifyListeners();
     try {
       _items = await repository.loadAzkar();
+      _loaded = true;
+    } catch (e) {
+      _error = e.toString();
     } finally {
       _loading = false;
       notifyListeners();
