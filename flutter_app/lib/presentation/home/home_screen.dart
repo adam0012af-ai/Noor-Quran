@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../../core/widgets/banner_ad_widget.dart';
 import '../azkar/azkar_screen.dart';
 import '../prayer/prayer_screen.dart';
 import '../qibla/qibla_screen.dart';
@@ -49,7 +47,7 @@ class HomeScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('نور', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-                          Text(DateFormat('EEEE، d MMMM', 'ar').format(DateTime.now()), style: Theme.of(context).textTheme.bodyMedium),
+                          Text('القرآن • الأذكار • الصلاة • القبلة', style: Theme.of(context).textTheme.bodyMedium),
                         ],
                       ),
                     ),
@@ -144,11 +142,7 @@ class HomeScreen extends StatelessWidget {
                 },
               ),
             ),
-            const SliverPadding(
-              padding: EdgeInsets.fromLTRB(18, 20, 18, 12),
-              sliver: SliverToBoxAdapter(child: Center(child: BannerAdWidget())),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
         ),
       ),
