@@ -1,33 +1,38 @@
-import 'package:muslim_data_flutter/muslim_data_flutter.dart';
+import 'dart:convert';
+import 'package:flutter/services.dart';
 import '../models/azkar_models.dart';
 
 class AzkarRepository {
-  final MuslimRepository _repository = MuslimRepository();
-
   Future<List<ZikrItem>> loadAzkar() async {
-    final chapters = await _repository.getAzkarChapters(language: Language.ar);
-    final grouped = await Future.wait(
-      chapters.map((chapter) async {
-        final items = await _repository.getAzkarItems(
-          language: Language.ar,
-          chapterId: chapter.id,
+    final raw = await rootBundle.loadString('assets/data/azkar.json');
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    final result = <ZikrItem>[];
+
+    for (final categoryEntry in decoded) {
+      final categoryMap = Map<String, dynamic>.from(categoryEntry as Map);
+      final category = (categoryMap['category'] ?? 'حصن المسلم').toString();
+      final items = (categoryMap['array'] as List<dynamic>? ?? const []);
+      for (final itemEntry in items) {
+        final item = Map<String, dynamic>.from(itemEntry as Map);
+        final id = '${categoryMap['id']}_${item['id']}';
+        final text = (item['text'] ?? '').toString().trim();
+        if (text.isEmpty) continue;
+        final countValue = item['count'];
+        final count = countValue is int
+            ? countValue
+            : int.tryParse(countValue?.toString() ?? '') ?? 1;
+        result.add(
+          ZikrItem(
+            id: id,
+            category: category,
+            text: text,
+            repeat: count <= 0 ? 1 : count,
+            reference: null,
+          ),
         );
-        return items
-            .map(
-              (item) => ZikrItem(
-                id: 'hisn_${chapter.id}_${item.id}',
-                category: chapter.categoryName.isEmpty ? 'حصن المسلم' : chapter.categoryName,
-                text: item.item,
-                repeat: 1,
-                reference: [
-                  chapter.name,
-                  item.reference,
-                ].where((e) => e.trim().isNotEmpty).join(' • '),
-              ),
-            )
-            .toList();
-      }),
-    );
-    return grouped.expand((e) => e).toList();
+      }
+    }
+
+    return result;
   }
 }
