@@ -39,6 +39,7 @@ jobs:
         run: |
           flutter create --platforms=android --org com.noorapp .
           flutter pub get
+          rm -rf test
           python3 - <<'PY'
           from pathlib import Path
           import re
