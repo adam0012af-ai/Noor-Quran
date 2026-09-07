@@ -1,4 +1,4 @@
-name: Flutter Final APK
+name: Flutter Safe Boot APK
 
 on:
   push:
@@ -26,6 +26,14 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Bundle verified offline azkar
+        working-directory: flutter_app
+        run: |
+          mkdir -p assets/data
+          curl --fail --location --retry 3 \
+            https://raw.githubusercontent.com/rn0x/Adhkar-json/e6d973ea0db6f7b019b0ad47e3a941be09fb8f16/adhkar.json \
+            -o assets/data/azkar.json
+          test -s assets/data/azkar.json
       - name: Prepare Android project
         working-directory: flutter_app
         run: |
@@ -54,32 +62,25 @@ jobs:
           gradle = Path('android/app/build.gradle.kts')
           g = gradle.read_text(encoding='utf-8')
           if 'isCoreLibraryDesugaringEnabled = true' not in g:
-              g = re.sub(
-                  r'(compileOptions\s*\{)',
-                  r'\1\n        isCoreLibraryDesugaringEnabled = true',
-                  g,
-                  count=1,
-              )
+              g = re.sub(r'(compileOptions\s*\{)', r'\1\n        isCoreLibraryDesugaringEnabled = true', g, count=1)
           if 'multiDexEnabled = true' not in g:
-              g = re.sub(
-                  r'(defaultConfig\s*\{)',
-                  r'\1\n        multiDexEnabled = true',
-                  g,
-                  count=1,
-              )
+              g = re.sub(r'(defaultConfig\s*\{)', r'\1\n        multiDexEnabled = true', g, count=1)
           if 'coreLibraryDesugaring(' not in g:
               g += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
           gradle.write_text(g, encoding='utf-8')
           PY
+      - name: Analyze Flutter code
+        working-directory: flutter_app
+        run: flutter analyze
       - name: Build release APK
         working-directory: flutter_app
         run: flutter build apk --release
       - name: Rename APK
-        run: cp flutter_app/build/app/outputs/flutter-apk/app-release.apk Noor-Final-Test-v1.0.0.apk
+        run: cp flutter_app/build/app/outputs/flutter-apk/app-release.apk Noor-SafeBoot-v1.0.2.apk
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Noor-Final-Test-v1.0.0-APK
-          path: Noor-Final-Test-v1.0.0.apk
+          name: Noor-SafeBoot-v1.0.2-APK
+          path: Noor-SafeBoot-v1.0.2.apk
           if-no-files-found: error
           retention-days: 30
